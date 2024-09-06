@@ -2099,8 +2099,8 @@ DropTableStmt:
 
 OptTemporary:
 	  /* empty */ { $$ = false; }
-	| "TEMPORARY" 
-	{ 
+	| "TEMPORARY"
+	{
 		$$ = true
 		yylex.AppendError(yylex.Errorf("TiDB doesn't support TEMPORARY TABLE, TEMPORARY will be parsed but ignored."))
 		parser.lastErrorAsWarn()
@@ -3819,6 +3819,17 @@ JoinTable:
          * }
          *
 	 */
+|	TableRef JoinType "JOIN" TableRef "ON" Expression
+	{
+		$$ = &ast.Join{
+			Left: $1.(ast.ResultSetNode),
+			Right: $4.(ast.ResultSetNode),
+			Tp: $2.(ast.JoinType),
+			On: &ast.OnCondition{
+				Expr: $6.(ast.ExprNode),
+			},
+		}
+	}
 
 JoinType:
 	"LEFT"
@@ -4083,7 +4094,7 @@ HintStorageTypeAndTable:
 			Tables:    $3.([]ast.HintTable),
 		}
 	}
-	
+
 QueryBlockOpt:
 	{
 		$$ = model.NewCIStr("")

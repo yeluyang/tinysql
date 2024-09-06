@@ -41,8 +41,10 @@ const (
 	prefixLen = 1 + idLen /*tableID*/ + 2
 	// RecordRowKeyLen is public for calculating average row size.
 	RecordRowKeyLen       = prefixLen + idLen /*handle*/
+	IndexRowKeyMinLen     = prefixLen + idLen /*handle*/
 	tablePrefixLength     = 1
 	recordPrefixSepLength = 2
+	indexPrefixSepLength  = 2
 )
 
 // TableSplitKeyLen is the length of key 't{table_id}' which is used for table split.
@@ -98,6 +100,28 @@ func DecodeRecordKey(key kv.Key) (tableID int64, handle int64, err error) {
 	 *   5. understanding the coding rules is a prerequisite for implementing this function,
 	 *      you can learn it in the projection 1-2 course documentation.
 	 */
+	if len(key) != RecordRowKeyLen {
+		return 0, 0, errInvalidRecordKey.GenWithStack("length not match: expected=%d, actual=%d", RecordRowKeyLen, len(key))
+	}
+
+	for i := range tablePrefix {
+		if key[i] != tablePrefix[i] {
+			return 0, 0, errInvalidRecordKey.GenWithStack("table prefix not match: expected=%s, actual=%s", tablePrefix, key[:tablePrefixLength])
+		}
+	}
+	key, tableID, err = codec.DecodeInt(key[tablePrefixLength:])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	for i := range recordPrefixSep {
+		if key[i] != recordPrefixSep[i] {
+			return 0, 0, errInvalidRecordKey.GenWithStack("record prefix not match: expected=%s, actual=%s", recordPrefixSep, key[:recordPrefixSepLength])
+		}
+	}
+
+	_, handle, err = codec.DecodeInt(key[recordPrefixSepLength:])
+
 	return
 }
 
@@ -148,6 +172,33 @@ func DecodeIndexKeyPrefix(key kv.Key) (tableID int64, indexID int64, indexValues
 	 *   5. understanding the coding rules is a prerequisite for implementing this function,
 	 *      you can learn it in the projection 1-2 course documentation.
 	 */
+	if len(key) < IndexRowKeyMinLen {
+		return 0, 0, nil, errInvalidRecordKey.GenWithStack("length not match: expected>%d, actual=%d", IndexRowKeyMinLen, len(key))
+	}
+
+	for i := range tablePrefix {
+		if key[i] != tablePrefix[i] {
+			return 0, 0, nil, errInvalidRecordKey.GenWithStack("table prefix not match: expected=%s, actual=%s", tablePrefix, key[:tablePrefixLength])
+		}
+	}
+	key, tableID, err = codec.DecodeInt(key[tablePrefixLength:])
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	for i := range indexPrefixSep {
+		if key[i] != indexPrefixSep[i] {
+			return 0, 0, nil, errInvalidRecordKey.GenWithStack("index prefix not match: expected=%s, actual=%s", indexPrefixSep, key[:indexPrefixSepLength])
+		}
+	}
+
+	key, indexID, err = codec.DecodeInt(key[indexPrefixSepLength:])
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	indexValues = key
+
 	return tableID, indexID, indexValues, nil
 }
 

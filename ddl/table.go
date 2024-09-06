@@ -15,6 +15,7 @@ package ddl
 
 import (
 	"fmt"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/infoschema"
@@ -348,7 +349,8 @@ func checkTableNotExistsFromStore(t *meta.Meta, schemaID int64, tableName string
 
 // updateVersionAndTableInfoWithCheck checks table info validate and updates the schema version and the table information
 func updateVersionAndTableInfoWithCheck(t *meta.Meta, job *model.Job, tblInfo *model.TableInfo, shouldUpdateVer bool) (
-	ver int64, err error) {
+	ver int64, err error,
+) {
 	err = checkTableInfoValid(tblInfo)
 	if err != nil {
 		job.State = model.JobStateCancelled
@@ -374,8 +376,19 @@ func updateVersionAndTableInfoWithCheck(t *meta.Meta, job *model.Job, tblInfo *m
  *       - `t.UpdateTable` and `updateSchemaVersion` will be used here.
  */
 func updateVersionAndTableInfo(t *meta.Meta, job *model.Job, tblInfo *model.TableInfo, shouldUpdateVer bool) (
-	ver int64, err error) {
-	// TODO complete this function.
+	ver int64, err error,
+) {
+	if shouldUpdateVer {
+		ver, err = updateSchemaVersion(t, job)
+		if err != nil {
+			return -1, errors.Trace(err)
+		}
+		tblInfo.UpdateTS = job.StartTS
+	}
 
-	return ver, errors.Trace(err)
+	if err := t.UpdateTable(job.SchemaID, tblInfo); err != nil {
+		return -1, errors.Trace(err)
+	}
+
+	return ver, nil
 }
